@@ -13,10 +13,9 @@ def is_python_version(*versions):
     return False
 
 
-# functools.total_ordering is only available from Python 2.7 and 3.2
-if is_python_version((2, 7), (3, 2)):
+try:
     from functools import total_ordering
-else:
+except ImportError:
     def total_ordering(cls):  # noqa
         """Class decorator that fills in missing ordering methods"""
         convert = {
@@ -36,7 +35,7 @@ else:
         roots = set(dir(cls)) & set(convert)
         if not roots:
             raise ValueError('must define at least one ordering operation: < > <= >=')  # noqa
-        root = max(roots)       # prefer __lt__ to __le__ to __gt__ to __ge__
+        root = max(roots)  # prefer __lt__ to __le__ to __gt__ to __ge__
         for opname, opfunc in convert[root]:
             if opname not in roots:
                 opfunc.__name__ = str(opname)
@@ -65,13 +64,23 @@ if not PY2:
         return dict((as_text(k), h[k]) for k in h)
 else:
     # Python 2.x
-    text_type = unicode
-    string_types = (str, unicode)
+    def text_type(v):
+        try:
+            return unicode(v)  # noqa
+        except Exception:
+            return unicode(v, "utf-8", errors="ignore")  # noqa
+
+    string_types = (str, unicode)  # noqa
 
     def as_text(v):
         if v is None:
             return None
-        return v.decode('utf-8')
+        elif isinstance(v, str):
+            return v.decode('utf-8')
+        elif isinstance(v, unicode):  # noqa
+            return v
+        else:
+            raise Exception("Input cannot be decoded into literal thing.")
 
     def decode_redis_hash(h):
         return h

@@ -2,20 +2,22 @@ sudo: false
 language: python
 services:
   - redis
-python:
-  - "2.6"
-  - "2.7"
-  - "3.3"
-  - "3.4"
-  - "3.5"
-  - "pypy"
+matrix:
+  include:
+  - python: "2.7"
+  - python: "3.4"
+  - python: "3.5"
+  - python: "3.6"
+  - python: "3.7"
+    dist: xenial
+  - python: 3.8-dev
+    dist: xenial
+  - python: "pypy"
 install:
-  - if [[ $TRAVIS_PYTHON_VERSION == 2.6 ]]; then pip install -r py26-requirements.txt; fi
   - pip install -e .
-  - pip install pytest-cov
-  - pip install coveralls
+  - pip install pytest-cov sentry-sdk codecov
   #- pip install pytest  # installed by Travis by default already
 script:
   - RUN_SLOW_TESTS_TOO=1 py.test --cov rq --durations=5
 after_success:
-  - coveralls
+  - codecov

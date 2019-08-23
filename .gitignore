@@ -1,6 +1,8 @@
 *.pyc
 *.egg-info
 
+.DS_Store
+
 /dump.rdb
 /.direnv
 /.envrc
@@ -8,6 +10,13 @@
 /dist
 /build
 .tox
+.pytest_cache/
 .vagrant
 Vagrantfile
 .idea/
+.coverage*
+/.cache
+
+Gemfile
+Gemfile.lock
+_site/

@@ -8,10 +8,12 @@ from __future__ import (absolute_import, division, print_function,
 
 import os
 import time
+import sys
 
-from rq import Connection, get_current_job, get_current_connection
+from rq import Connection, get_current_job, get_current_connection, Queue
 from rq.decorators import job
-from rq.compat import PY2
+from rq.compat import PY2, text_type
+from rq.worker import HerokuWorker
 
 
 def say_pid():
@@ -23,6 +25,11 @@ def say_hello(name=None):
     if name is None:
         name = 'Stranger'
     return 'Hi there, %s!' % (name,)
+
+
+def say_hello_unicode(name=None):
+    """A job with a single argument and a return value."""
+    return text_type(say_hello(name))  # noqa
 
 
 def do_nothing():
@@ -59,8 +66,21 @@ def access_self():
     assert get_current_job() is not None
 
 
+def modify_self(meta):
+    j = get_current_job()
+    j.meta.update(meta)
+    j.save()
+
+
+def modify_self_and_error(meta):
+    j = get_current_job()
+    j.meta.update(meta)
+    j.save()
+    return 1 / 0
+
+
 def echo(*args, **kwargs):
-    return (args, kwargs)
+    return args, kwargs
 
 
 class Number(object):
@@ -99,6 +119,48 @@ def black_hole(job, *exc_info):
     return False
 
 
+def add_meta(job, *exc_info):
+    job.meta = {'foo': 1}
+    job.save()
+    return True
+
+
+def save_key_ttl(key):
+    # Stores key ttl in meta
+    job = get_current_job()
+    ttl = job.connection.ttl(key)
+    job.meta = {'ttl': ttl}
+    job.save_meta()
+
+
 def long_running_job(timeout=10):
     time.sleep(timeout)
     return 'Done sleeping...'
+
+
+def run_dummy_heroku_worker(sandbox, _imminent_shutdown_delay):
+    """
+    Run the work horse for a simplified heroku worker where perform_job just
+    creates two sentinel files 2 seconds apart.
+    :param sandbox: directory to create files in
+    :param _imminent_shutdown_delay: delay to use for HerokuWorker
+    """
+    sys.stderr = open(os.path.join(sandbox, 'stderr.log'), 'w')
+
+    class TestHerokuWorker(HerokuWorker):
+        imminent_shutdown_delay = _imminent_shutdown_delay
+
+        def perform_job(self, job, queue):
+            create_file(os.path.join(sandbox, 'started'))
+            # have to loop here rather than one sleep to avoid holding the GIL
+            # and preventing signals being received
+            for i in range(20):
+                time.sleep(0.1)
+            create_file(os.path.join(sandbox, 'finished'))
+
+    w = TestHerokuWorker(Queue('dummy'))
+    w.main_work_horse(None, None)
+
+
+class DummyQueue(object):
+    pass
